@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 import sqlite3
 from pathlib import Path
 from datetime import datetime, date
@@ -699,6 +699,270 @@ def payroll_export(run_id):
             "officedocument.spreadsheetml.sheet"
         )
     )
+
+def _payslip_number(value):
+    """Format a salary value as a whole-rupee amount for the payslip."""
+    return f"{float(value or 0):.0f}"
+
+
+def _build_payslip_pdf(rows, run):
+    """
+    Build a combined PDF with one payslip per employee, following the
+    supplied school payslip layout.
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        Image as RLImage, PageBreak, KeepTogether
+    )
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=18*mm,
+        leftMargin=18*mm,
+        topMargin=0*mm,
+        bottomMargin=12*mm,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "PayslipTitle", parent=styles["Title"],
+        fontName="Times-Bold", fontSize=17, leading=20,
+        alignment=TA_CENTER, spaceAfter=8
+    )
+    school_style = ParagraphStyle(
+        "SchoolName", parent=styles["Normal"],
+        fontName="Helvetica-Bold", fontSize=14, leading=16,
+        textColor=colors.HexColor("#183b78"), alignment=TA_CENTER
+    )
+    sub_school_style = ParagraphStyle(
+        "SchoolSub", parent=styles["Normal"],
+        fontName="Helvetica-Bold", fontSize=9.5, leading=11,
+        textColor=colors.HexColor("#1f6b45"), alignment=TA_CENTER
+    )
+    small_center = ParagraphStyle(
+        "SmallCenter", parent=styles["Normal"],
+        fontName="Times-Roman", fontSize=8.5, leading=10,
+        alignment=TA_CENTER
+    )
+    label_style = ParagraphStyle(
+        "Label", parent=styles["Normal"],
+        fontName="Times-Roman", fontSize=10.5, leading=13
+    )
+    value_style = ParagraphStyle(
+        "Value", parent=styles["Normal"],
+        fontName="Times-Roman", fontSize=10.5, leading=13
+    )
+    bold_value = ParagraphStyle(
+        "BoldValue", parent=value_style, fontName="Times-Bold"
+    )
+    money_style = ParagraphStyle(
+        "Money", parent=value_style, alignment=TA_RIGHT
+    )
+    bold_money = ParagraphStyle(
+        "BoldMoney", parent=money_style, fontName="Times-Bold"
+    )
+    table_head = ParagraphStyle(
+        "TableHead", parent=styles["Normal"],
+        fontName="Times-Bold", fontSize=10.5, leading=12,
+        alignment=TA_CENTER
+    )
+    table_cell = ParagraphStyle(
+        "TableCell", parent=styles["Normal"],
+        fontName="Times-Roman", fontSize=10.5, leading=12
+    )
+    table_money = ParagraphStyle(
+        "TableMoney", parent=table_cell, alignment=TA_RIGHT
+    )
+    table_bold = ParagraphStyle(
+        "TableBold", parent=table_cell, fontName="Times-Bold"
+    )
+    table_bold_money = ParagraphStyle(
+        "TableBoldMoney", parent=table_money, fontName="Times-Bold"
+    )
+
+    logo_path = BASE_DIR / "static" / "school_logo.png"
+    story = []
+
+    month = int(run["payroll_month"])
+    year = int(run["payroll_year"])
+    month_name = date(year, month, 1).strftime("%B %Y")
+    _, month_end = month_bounds(year, month)
+    no_of_days = month_end.day
+
+    for index, r in enumerate(rows):
+        conn = db()
+        emp = conn.execute(
+            "SELECT designation FROM employees WHERE empno=?",
+            (r["empno"],)
+        ).fetchone()
+        conn.close()
+        designation = emp["designation"] if emp else ""
+
+        # Use the supplied school header image. The image is kept intact and
+        # only scaled proportionately to the payslip width.
+        header_path = BASE_DIR / "static" / "payslip_header.png"
+        header_width = 162 * mm
+        header_height = header_width * 300 / 1094
+
+        if header_path.exists():
+            header_image = RLImage(
+                str(header_path),
+                width=header_width,
+                height=header_height
+            )
+        else:
+            header_image = Paragraph(
+                "SHRI KHONGURUNATHAR VIDYALAYAM",
+                school_style
+            )
+
+        header = Table(
+            [[header_image]],
+            colWidths=[header_width]
+        )
+        header.setStyle(TableStyle([
+            ("VALIGN", (0,0), (-1,-1), "TOP"),
+            ("LEFTPADDING", (0,0), (-1,-1), 0),
+            ("RIGHTPADDING", (0,0), (-1,-1), 0),
+            ("TOPPADDING", (0,0), (-1,-1), 0),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+        ]))
+        story.append(header)
+        story.append(Paragraph("PAYSLIP", title_style))
+
+        # Employee details block
+        info = [
+            [Paragraph("Employee Name", label_style),
+             Paragraph(r["full_name"] or "", bold_value),
+             Paragraph("No. of Days in a Month", label_style),
+             Paragraph(str(no_of_days), value_style)],
+            [Paragraph("Designation", label_style),
+             Paragraph(designation or "", value_style),
+             Paragraph("Leave Days", label_style),
+             Paragraph(f"{float(r['leave_days'] or 0):g}", value_style)],
+            [Paragraph("Pay Period", label_style),
+             Paragraph(month_name, value_style),
+             "", ""],
+        ]
+        info_table = Table(info, colWidths=[42*mm, 48*mm, 55*mm, 17*mm])
+        info_table.setStyle(TableStyle([
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("LEFTPADDING", (0,0), (-1,-1), 0),
+            ("RIGHTPADDING", (0,0), (-1,-1), 0),
+            ("TOPPADDING", (0,0), (-1,-1), 1.5*mm),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 1.5*mm),
+        ]))
+        story.append(info_table)
+        story.append(Spacer(1, 5*mm))
+
+        # Total Deduction = PF + ESI + Leave Deduction.
+        payslip_total_deduction = (
+            Decimal(str(r["employee_pf"] or 0))
+            + Decimal(str(r["employee_esi"] or 0))
+            + Decimal(str(r["leave_deduct"] or 0))
+        )
+
+        earnings = [
+            [Paragraph("Earnings", table_head), Paragraph("Amount", table_head),
+             Paragraph("Deductions", table_head), Paragraph("Amount", table_head)],
+            [Paragraph("Basic Salary", table_cell), Paragraph(_payslip_number(r["basic"]), table_money),
+             Paragraph("PF", table_cell), Paragraph(_payslip_number(r["employee_pf"]), table_money)],
+            [Paragraph("Dearness Allowance", table_cell), Paragraph(_payslip_number(r["da"]), table_money),
+             Paragraph("ESI", table_cell), Paragraph(_payslip_number(r["employee_esi"]), table_money)],
+            [Paragraph("House Rent Allowance", table_cell), Paragraph(_payslip_number(r["hra"]), table_money),
+             Paragraph("Leave Deduction", table_cell), Paragraph(_payslip_number(r["leave_deduct"]), table_money)],
+            [Paragraph("Special Allowance", table_cell), Paragraph(_payslip_number(r["special_allowance"]), table_money),
+             "", ""],
+            [Paragraph("Conveyance", table_cell), Paragraph(_payslip_number(r["conveyance"]), table_money),
+             "", ""],
+            [Paragraph("Total", table_bold), Paragraph(_payslip_number(r["gross_salary"]), table_bold_money),
+             Paragraph("Total Deduction", table_bold), Paragraph(_payslip_number(payslip_total_deduction), table_bold_money)],
+            ["", "", Paragraph("Net Salary", table_bold), Paragraph(_payslip_number(r["net_salary"]), ParagraphStyle(
+                "NetMoney", parent=table_bold_money, fontSize=16, leading=17
+            ))],
+        ]
+
+        payslip_table = Table(
+            earnings,
+            colWidths=[52*mm, 42*mm, 48*mm, 20*mm],
+            rowHeights=[8*mm, 7.5*mm, 7.5*mm, 7.5*mm, 7.5*mm, 7.5*mm, 7.5*mm, 9*mm]
+        )
+        payslip_table.setStyle(TableStyle([
+            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("LEFTPADDING", (0,0), (-1,-1), 2*mm),
+            ("RIGHTPADDING", (0,0), (-1,-1), 2*mm),
+            ("TOPPADDING", (0,0), (-1,-1), 0.5*mm),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 0.5*mm),
+        ]))
+        story.append(payslip_table)
+
+        if index < len(rows) - 1:
+            story.append(PageBreak())
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+@app.route("/payroll/payslips/<int:run_id>")
+def payroll_payslips(run_id):
+    conn = db()
+    run = conn.execute(
+        "SELECT * FROM payroll_runs WHERE id=?", (run_id,)
+    ).fetchone()
+    rows = conn.execute(
+        "SELECT * FROM payroll_results WHERE run_id=? ORDER BY empno",
+        (run_id,)
+    ).fetchall()
+    conn.close()
+
+    if not run:
+        flash("Payroll run not found.", "error")
+        return redirect(url_for("payroll_history"))
+
+    pdf = _build_payslip_pdf(rows, run)
+    filename = f"Payslips_{int(run['payroll_month']):02d}_{run['payroll_year']}.pdf"
+    return send_file(
+        pdf,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/pdf"
+    )
+
+
+@app.route("/payroll/payslip/<int:run_id>/<empno>")
+def payroll_payslip(run_id, empno):
+    conn = db()
+    run = conn.execute(
+        "SELECT * FROM payroll_runs WHERE id=?", (run_id,)
+    ).fetchone()
+    row = conn.execute(
+        "SELECT * FROM payroll_results WHERE run_id=? AND empno=?",
+        (run_id, empno)
+    ).fetchone()
+    conn.close()
+
+    if not run or not row:
+        flash("Payslip not found.", "error")
+        return redirect(url_for("payroll_history"))
+
+    pdf = _build_payslip_pdf([row], run)
+    filename = f"Payslip_{empno}_{int(run['payroll_month']):02d}_{run['payroll_year']}.pdf"
+    return send_file(
+        pdf,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/pdf"
+    )
+
 @app.route("/payroll/history")
 def payroll_history():
     conn = db()
