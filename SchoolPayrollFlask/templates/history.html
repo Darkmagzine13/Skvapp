@@ -10,6 +10,7 @@
 <td>
 <a class="button small" href="{{ url_for('payroll_run', run_id=r.id) }}">View</a>
 <a class="button small" href="{{ url_for('payroll_export', run_id=r.id) }}">Download Excel</a>
+<a class="button small" href="{{ url_for('payroll_payslips', run_id=r.id) }}">Download Payslips</a>
 </td></tr>
 {% endfor %}
 </tbody>
