@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Payroll Preview – {{ "%02d"|format(month) }}/{{ year }}</h1>
+{% if missing %}
+<div class="flash error">No currently-valid salary record found for: {{ missing|join(", ") }}</div>
+{% endif %}
+<div class="table-wrap">
+<table>
+<thead><tr>
+<th>Designation</th><th>Employee ID</th><th>Employee Name</th><th>Basic Salary</th><th>DA</th><th>HRA(+)</th><th>Special Allowance(+)</th><th>Conveyance(+)</th><th>Leave Days</th>
+<th>Leave Deduct</th><th>Gross</th><th>Emp PF</th><th>Emp ESI</th><th>Total Deduct</th><th>Net Salary</th><th>Total CTC</th>
+</tr></thead>
+<tbody>
+{% for r in results %}
+<tr>
+<td>{{ r.designation }}</td><td>{{ r.empno }}</td><td>{{ r.full_name }}</td>
+<td>{{ "%.2f"|format(r.basic) }}</td><td>{{ "%.2f"|format(r.da) }}</td><td>{{ "%.2f"|format(r.hra) }}</td>
+<td>{{ "%.2f"|format(r.special_allowance) }}</td><td>{{ "%.2f"|format(r.conveyance) }}</td><td>{{ "%.2f"|format(r.leave_days) }}</td>
+<td>{{ "%.2f"|format(r.leave_deduct) }}</td><td>{{ "%.2f"|format(r.gross_salary) }}</td>
+<td>{{ "%.2f"|format(r.employee_pf) }}</td><td>{{ "%.2f"|format(r.employee_esi) }}</td>
+<td>{{ "%.2f"|format(r.total_deduct) }}</td><td><strong>{{ "%.2f"|format(r.net_salary) }}</strong></td>
+<td>{{ "%.2f"|format(r.total_ctc) }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+<form method="post" action="{{ url_for('payroll_save') }}">
+<input type="hidden" name="month" value="{{ month }}"><input type="hidden" name="year" value="{{ year }}">
+<button type="submit">Save Payroll</button>
+<a class="button secondary" href="{{ url_for('payroll', month=month, year=year) }}">Back to Leave Input</a>
+</form>
+{% endblock %}

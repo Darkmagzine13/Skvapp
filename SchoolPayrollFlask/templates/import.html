@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Import SAP Data</h1>
+<div class="panel">
+<p>Upload the UTF-16 SAP Dynamic List Display files you supplied.</p>
+<form method="post" enctype="multipart/form-data">
+  <label>Employee Master (ZSKV_EMPMASTER.xls)</label>
+  <input type="file" name="employee_file" accept=".xls,.txt">
+  <label>Employee Salary (ZSKV_EMPSALARY.xls)</label>
+  <input type="file" name="salary_file" accept=".xls,.txt">
+  <button type="submit">Import</button>
+</form>
+</div>
+{% endblock %}

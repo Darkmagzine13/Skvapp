@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Salary Master</h1>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Emp No</th><th>Name</th><th>Valid From</th><th>Valid To</th><th>Basic</th><th>DA</th><th>HRA</th><th>Conveyance</th><th>Special Allowance</th></tr></thead>
+<tbody>
+{% for s in salaries %}
+<tr>
+<td>{{ s.empno }}</td><td>{{ s.full_name or "" }}</td><td>{{ s.valid_from }}</td><td>{{ s.valid_to }}</td>
+<td>{{ "%.2f"|format(s.basic) }}</td><td>{{ "%.2f"|format(s.da) }}</td><td>{{ "%.2f"|format(s.hra) }}</td>
+<td>{{ "%.2f"|format(s.conveyance) }}</td><td>{{ "%.2f"|format(s.special_allowance) }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

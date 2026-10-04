@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Monthly Payroll</h1>
+
+<!-- Select the month/year and load its saved leave deductions -->
+<form method="get" class="panel">
+  <div class="row">
+    <label>Month
+      <select name="month">
+        {% for m in range(1,13) %}
+          <option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>Year
+      <input type="number" name="year" value="{{ year }}" min="2000" max="2100">
+    </label>
+
+    <button type="submit">Load Month</button>
+  </div>
+</form>
+
+<!-- Enter/edit leave deductions for the selected month/year -->
+<form method="post" class="panel">
+  <input type="hidden" name="month" value="{{ month }}">
+  <input type="hidden" name="year" value="{{ year }}">
+
+  <p>
+    Enter or edit the leave deduction days for each employee for
+    <strong>{{ "%02d"|format(month) }}/{{ year }}</strong>.
+    Previously saved values for this month are displayed automatically.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Emp No</th>
+          <th>Name</th>
+          <th>Joining Date</th>
+          <th>Leave Deduction Days</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for e in employees %}
+        <tr>
+          <td>{{ e.empno }}</td>
+          <td>{{ e.full_name }}</td>
+          <td>{{ e.joining_date }}</td>
+          <td>
+            <input
+              type="number"
+              name="leave_{{ e.empno }}"
+              value="{{ leave_values.get(e.empno, 0) }}"
+              step="0.5"
+              min="0"
+            >
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <button type="submit">Update &amp; Calculate Salary</button>
+</form>
+{% endblock %}

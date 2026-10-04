@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Payroll Dashboard</h1>
+<div class="cards">
+  <div class="card"><span>Employees</span><strong>{{ employees }}</strong></div>
+  <div class="card"><span>Salary Records</span><strong>{{ salaries }}</strong></div>
+  <div class="card"><span>Payroll Runs</span><strong>{{ runs }}</strong></div>
+</div>
+<div class="panel">
+  <h2>Start here</h2>
+  <p>Import the SAP Employee Master and Salary Master, then run monthly payroll.</p>
+  <a class="button" href="{{ url_for('import_page') }}">Import SAP Data</a>
+  <a class="button secondary" href="{{ url_for('payroll') }}">Run Monthly Payroll</a>
+</div>
+{% endblock %}
