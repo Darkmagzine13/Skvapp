@@ -2,9 +2,10 @@
 {% block content %}
 <h1>Saved Payroll – {{ "%02d"|format(run.payroll_month) }}/{{ run.payroll_year }}</h1>
 <a class="button" href="{{ url_for('payroll_export', run_id=run.id) }}">Download Salary Excel</a>
+<a class="button" href="{{ url_for('payroll_payslips', run_id=run.id) }}">Download All Payslips PDF</a>
 <div class="table-wrap">
 <table>
-<thead><tr><th>Emp No</th><th>Name</th><th>Leave</th><th>Gross</th><th>Emp PF</th><th>Emp ESI</th><th>Total Deduct</th><th>Net Salary</th><th>Total CTC</th></tr></thead>
+<thead><tr><th>Emp No</th><th>Name</th><th>Leave</th><th>Gross</th><th>Emp PF</th><th>Emp ESI</th><th>Total Deduct</th><th>Net Salary</th><th>Total CTC</th><th>Payslip</th></tr></thead>
 <tbody>
 {% for r in results %}
 <tr>
@@ -12,6 +13,7 @@
 <td>{{ "%.2f"|format(r.gross_salary) }}</td><td>{{ "%.2f"|format(r.employee_pf) }}</td>
 <td>{{ "%.2f"|format(r.employee_esi) }}</td><td>{{ "%.2f"|format(r.total_deduct) }}</td>
 <td><strong>{{ "%.2f"|format(r.net_salary) }}</strong></td><td>{{ "%.2f"|format(r.total_ctc) }}</td>
+<td><a class="button small" href="{{ url_for('payroll_payslip', run_id=run.id, empno=r.empno) }}">PDF</a></td>
 </tr>
 {% endfor %}
 <tr class="subtotal-row">
@@ -23,6 +25,7 @@
 <td><strong>{{ "%.2f"|format(results|sum(attribute="total_deduct")) }}</strong></td>
 <td><strong>{{ "%.2f"|format(results|sum(attribute="net_salary")) }}</strong></td>
 <td><strong>{{ "%.2f"|format(results|sum(attribute="total_ctc")) }}</strong></td>
+<td></td>
 </tr>
 </tbody>
 </table>
